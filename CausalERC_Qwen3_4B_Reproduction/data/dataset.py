@@ -13,7 +13,7 @@ def _speaker_ids(xs):
 def collate_dialogues(dialogues,tokenizer,token_ids,max_length=768,history_window=4,decisions=None,standard=False):
     a_id,v_id,t_id=token_ids; lengths=torch.tensor([d["utt_count"] for d in dialogues]); B,T=len(dialogues),int(lengths.max()); td=len(dialogues[0]["text_feats"][0]); ad=len(dialogues[0]["audio_feats"][0]); vd=len(dialogues[0]["visual_feats"][0]); text=torch.zeros(B,T,td); audio=torch.zeros(B,T,ad); visual=torch.zeros(B,T,vd); spk=torch.zeros(B,T,dtype=torch.long); enc=[]; labels=[]; pos=[[],[],[]]; vids=[]; utts=[]
     for b,d in enumerate(dialogues):
-        n=d["utt_count"]; text[b,:n]=torch.tensor(d["text_feats"]); audio[b,:n]=torch.tensor(d["audio_feats"]); visual[b,:n]=torch.tensor(d["visual_feats"]); spk[b,:n]=torch.tensor(_speaker_ids(d["speakers"]))
+        n=d["utt_count"]; text[b,:n]=torch.stack([torch.as_tensor(x) for x in d["text_feats"]]); audio[b,:n]=torch.stack([torch.as_tensor(x) for x in d["audio_feats"]]); visual[b,:n]=torch.stack([torch.as_tensor(x) for x in d["visual_feats"]]); spk[b,:n]=torch.tensor(_speaker_ids(d["speakers"]))
         for i in range(n):
             dec=None if decisions is None else decisions[d["vid"]][i]; p=build_prompt(d["speakers"],d["texts"],i,LABELS,history_window,dec,standard)
             if hasattr(tokenizer,"apply_chat_template"): p=tokenizer.apply_chat_template([{"role":"user","content":p}],tokenize=False,add_generation_prompt=True)
