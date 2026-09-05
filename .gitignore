@@ -1,0 +1,25 @@
+# Python caches and local tooling
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Datasets, checkpoints, model caches and experiment outputs
+**/outputs/
+*.pkl
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.log
+
+# IDE and OS files
+.idea/
+.vscode/
+.claude/
+*.iml
+.DS_Store
+Thumbs.db
