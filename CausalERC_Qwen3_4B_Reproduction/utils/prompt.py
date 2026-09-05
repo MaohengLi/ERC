@@ -16,8 +16,9 @@ def select_causal_type(speakers:Sequence[str],texts:Sequence[str],target_idx:int
     else:
         current=str(texts[target_idx]).lower(); causal=1 if any(k in current for k in ("!","?","sorry","hate","love","can't","cannot")) else 0
     return CausalDecision(causal,start,start if causal==1 and target_idx>start else None)
-def build_prompt(speakers:Sequence[str],texts:Sequence[str],target_idx:int,labels:Sequence[str],history_window:int=4,decision:Optional[CausalDecision]=None):
+def build_prompt(speakers:Sequence[str],texts:Sequence[str],target_idx:int,labels:Sequence[str],history_window:int=4,decision:Optional[CausalDecision]=None,standard:bool=False):
     if len(speakers)!=len(texts) or not 0<=target_idx<len(texts): raise ValueError("invalid dialogue")
     d=decision or select_causal_type(speakers,texts,target_idx); start=max(0,target_idx-history_window) if decision is None else min(target_idx,d.history_start); guide=C1 if d.causal_type==0 else C2; lines=[f"{speakers[i]}: {texts[i]}" for i in range(start,target_idx)]; lines.append(f"{speakers[target_idx]}: <|audio_feat|> <|visual_feat|> <|text_feat|> {texts[target_idx]}")
     if d.causal_type==1 and d.peak_idx is not None and d.peak_idx<target_idx: lines.append(f"Peak context: {speakers[d.peak_idx]}: {texts[d.peak_idx]}")
-    return "You are an expert in conversational emotion recognition.\nCausal guidance: "+guide+"\nConversation:\n"+"\n".join(lines)+f"\nSelect one label from [{', '.join(labels)}]."
+    guidance="" if standard else "\nCausal guidance: "+guide
+    return "You are an expert in conversational emotion recognition."+guidance+"\nConversation:\n"+"\n".join(lines)+f"\nSelect one label from [{', '.join(labels)}]."
