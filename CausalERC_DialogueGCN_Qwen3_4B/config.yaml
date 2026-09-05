@@ -1,0 +1,26 @@
+data:
+  path: D:/C_Code/PycharmProjects/MMAAE_MDiaGCN/MMAAE_MDiaGCN/MultiModal_DialogGCN/save/data.pkl
+model:
+  backbone: Qwen/Qwen3-4B
+  hidden_dim: 200
+  num_classes: 6
+  attention_heads: 4
+  dropout: 0.3
+  gcn_layers: 2
+  graph_context_window: 10
+  prompt_history_window: 4
+training:
+  epochs: 10
+  learning_rate: 2.0e-4
+  weight_decay: 0.01
+  dialogue_batch_size: 1
+  gradient_accumulation: 4
+  max_length: 768
+  seed: 42
+  output_dir: outputs/qwen3_4b
+loss:
+  lambda_hgr: 0.1
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
