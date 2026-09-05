@@ -1,8 +1,0 @@
-torch>=2.4
-transformers>=4.51
-peft>=0.19
-bitsandbytes>=0.45
-numpy>=1.26
-scikit-learn>=1.4
-pyyaml>=6.0
-safetensors>=0.4

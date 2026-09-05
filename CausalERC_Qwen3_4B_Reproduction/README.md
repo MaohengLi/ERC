@@ -11,9 +11,10 @@ Text/Audio/Visual -> Linear+LayerNorm -> three DialogueRNN states
  -> Qwen3-4B NF4 + QLoRA -> six-class classifier
 ```
 
-Labels: `angry, happy, sad, neutral, excited, frustrated`. Causal decisions
-are based only on previous-epoch logits and are keyed by dialogue ID. This
-baseline contains exactly A/V/T feature tokens—no Graph Token or Route Token.
+Labels: `angry, happy, sad, neutral, excited, frustrated`. C1/C2 is selected
+from the current dialogue history and utterance in a single pass; no
+epoch-level prediction cache is used. This baseline contains exactly A/V/T
+feature tokens—no Graph Token or Route Token.
 
 Install and test:
 
