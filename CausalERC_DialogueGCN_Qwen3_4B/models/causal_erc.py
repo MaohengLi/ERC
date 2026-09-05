@@ -9,8 +9,8 @@ from .soft_hgr import soft_hgr_loss
 from utils.causal_reasoner import CausalReasoner
 
 class CausalERCDialogueGCNQwen3(nn.Module):
-    def __init__(self,llm,token_ids,text_dim,audio_dim,visual_dim,hidden_dim=200,num_classes=6,heads=4,dropout=0.3,lambda_hgr=0.1,gcn_layers=2,context_window=10,history_window=4):
-        super().__init__(); self.lambda_hgr=lambda_hgr; self.token_ids=token_ids; self.encoder=MultimodalEncoder(text_dim,audio_dim,visual_dim,hidden_dim,heads,dropout,gcn_layers,context_window); self.qwen=Qwen3Wrapper(llm,token_ids,hidden_dim,num_classes); self.causal_reasoner=CausalReasoner(history_window)
+    def __init__(self,llm,token_ids,text_dim,audio_dim,visual_dim,hidden_dim=200,num_classes=6,heads=4,dropout=0.3,lambda_hgr=0.1,gcn_layers=2,context_window=10,history_window=4,llm_micro_batch=1):
+        super().__init__(); self.lambda_hgr=lambda_hgr; self.token_ids=token_ids; self.encoder=MultimodalEncoder(text_dim,audio_dim,visual_dim,hidden_dim,heads,dropout,gcn_layers,context_window); self.qwen=Qwen3Wrapper(llm,token_ids,hidden_dim,num_classes,llm_micro_batch); self.causal_reasoner=CausalReasoner(history_window)
 
     def encode_context(self,batch):
         f=self.encoder(batch["text"],batch["audio"],batch["visual"],batch["speaker_ids"],batch["lengths"]); lengths=batch["lengths"]; flat=lambda x:torch.cat([x[b,:int(lengths[b])] for b in range(x.size(0))]); return f,flat(f["text"]),flat(f["audio"]),flat(f["visual"])

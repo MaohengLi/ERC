@@ -3,10 +3,19 @@ import torch
 from torch import nn
 
 class Qwen3Wrapper(nn.Module):
-    def __init__(self,llm,token_ids,hidden_dim,num_classes=6):
-        super().__init__(); self.llm=llm; self.ids=token_ids; h=int(llm.config.hidden_size); self.audio_projection=nn.Sequential(nn.Linear(hidden_dim,h),nn.LayerNorm(h)); self.visual_projection=nn.Sequential(nn.Linear(hidden_dim,h),nn.LayerNorm(h)); self.text_projection=nn.Sequential(nn.Linear(hidden_dim,h),nn.LayerNorm(h)); self.norm=nn.LayerNorm(h); self.classifier=nn.Linear(h,num_classes)
+    def __init__(self,llm,token_ids,hidden_dim,num_classes=6,micro_batch=1):
+        super().__init__(); self.llm=llm; self.ids=token_ids; self.micro_batch=max(1,micro_batch); h=int(llm.config.hidden_size); self.audio_projection=nn.Sequential(nn.Linear(hidden_dim,h),nn.LayerNorm(h)); self.visual_projection=nn.Sequential(nn.Linear(hidden_dim,h),nn.LayerNorm(h)); self.text_projection=nn.Sequential(nn.Linear(hidden_dim,h),nn.LayerNorm(h)); self.norm=nn.LayerNorm(h); self.classifier=nn.Linear(h,num_classes)
     def forward(self,input_ids,attention_mask,audio,visual,text,positions):
-        e=self.llm.get_input_embeddings()(input_ids).clone(); rows=torch.arange(input_ids.size(0),device=input_ids.device); e[rows,positions[0]]=self.audio_projection(audio).to(e.dtype); e[rows,positions[1]]=self.visual_projection(visual).to(e.dtype); e[rows,positions[2]]=self.text_projection(text).to(e.dtype); o=self.llm(inputs_embeds=e,attention_mask=attention_mask,output_hidden_states=True,return_dict=True,use_cache=False,logits_to_keep=1); last=attention_mask.sum(-1).long()-1; return self.classifier(self.norm(o.hidden_states[-1][rows,last]))
+        outputs=[]
+        for start in range(0,input_ids.size(0),self.micro_batch):
+            end=min(start+self.micro_batch,input_ids.size(0)); ids=input_ids[start:end]; mask=attention_mask[start:end]; rows=torch.arange(end-start,device=input_ids.device); e=self.llm.get_input_embeddings()(ids).clone(); e[rows,positions[0][start:end]]=self.audio_projection(audio[start:end]).to(e.dtype); e[rows,positions[1][start:end]]=self.visual_projection(visual[start:end]).to(e.dtype); e[rows,positions[2][start:end]]=self.text_projection(text[start:end]).to(e.dtype)
+            base=self.llm.get_base_model() if hasattr(self.llm,"get_base_model") else self.llm; decoder=getattr(base,"model",None)
+            if decoder is not None:
+                o=decoder(inputs_embeds=e,attention_mask=mask,output_hidden_states=False,return_dict=True,use_cache=False); hidden=o.last_hidden_state
+            else:
+                o=self.llm(inputs_embeds=e,attention_mask=mask,output_hidden_states=True,return_dict=True,use_cache=False); hidden=getattr(o,"last_hidden_state",None); hidden=o.hidden_states[-1] if hidden is None else hidden
+            last=mask.sum(-1).long()-1; outputs.append(self.classifier(self.norm(hidden[rows,last])))
+        return torch.cat(outputs,dim=0)
 
 def load_qwen3_4b(model_name,tokenizer_size,train=True,lora_rank=16,lora_alpha=32,lora_dropout=0.05):
     if not torch.cuda.is_available(): raise RuntimeError("Qwen3-4B NF4 loading requires CUDA")

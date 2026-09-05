@@ -1,6 +1,6 @@
 """Train Causal-ERC DialogueGCN Qwen3-4B from config.yaml."""
 from __future__ import annotations
-import argparse,json
+import argparse,json,time
 from pathlib import Path
 import torch,yaml
 from data import LABELS,load_iemocap,collate_dialogues
@@ -26,7 +26,7 @@ def move(batch,device): return {k:(v.to(device) if isinstance(v,torch.Tensor) el
 def build_model(cfg,tokenizer,token_ids,sample,training=True):
     lc=cfg["lora"]; mc=cfg["model"]
     llm=load_qwen3_4b(mc["backbone"],len(tokenizer),training,lc["rank"],lc["alpha"],lc["dropout"])
-    return CausalERCDialogueGCNQwen3(llm,token_ids,len(sample["text_feats"][0]),len(sample["audio_feats"][0]),len(sample["visual_feats"][0]),hidden_dim=mc["hidden_dim"],num_classes=mc["num_classes"],heads=mc["attention_heads"],dropout=mc["dropout"],lambda_hgr=cfg["loss"]["lambda_hgr"],gcn_layers=mc["gcn_layers"],context_window=mc["graph_context_window"],history_window=mc["prompt_history_window"]).cuda()
+    return CausalERCDialogueGCNQwen3(llm,token_ids,len(sample["text_feats"][0]),len(sample["audio_feats"][0]),len(sample["visual_feats"][0]),hidden_dim=mc["hidden_dim"],num_classes=mc["num_classes"],heads=mc["attention_heads"],dropout=mc["dropout"],lambda_hgr=cfg["loss"]["lambda_hgr"],gcn_layers=mc["gcn_layers"],context_window=mc["graph_context_window"],history_window=mc["prompt_history_window"],llm_micro_batch=cfg["training"]["llm_micro_batch"]).cuda()
 
 @torch.no_grad()
 def evaluate_dialogues(model,dialogues,tokenizer,token_ids,cfg):
@@ -37,13 +37,16 @@ def evaluate_dialogues(model,dialogues,tokenizer,token_ids,cfg):
 
 def main():
     parser=argparse.ArgumentParser(); parser.add_argument("--config",default="config.yaml"); args=parser.parse_args(); cfg=load_config(args.config); tc=cfg["training"]; seed_everything(tc["seed"]); data=load_iemocap(cfg["data"]["path"]); tokenizer,token_ids=build_tokenizer(cfg["model"]["backbone"]); model=build_model(cfg,tokenizer,token_ids,data["train"][0],True); print(json.dumps(model.parameter_report(),indent=2)); optimizer=torch.optim.AdamW([p for p in model.parameters() if p.requires_grad],lr=tc["learning_rate"],weight_decay=tc["weight_decay"]); output=Path(tc["output_dir"]); output.mkdir(parents=True,exist_ok=True); best=-1.; history=[]
+    run_started=time.time()
     for epoch in range(1,tc["epochs"]+1):
-        model.train(); optimizer.zero_grad(set_to_none=True); total=0.; steps=0
+        model.train(); optimizer.zero_grad(set_to_none=True); total=0.; steps=0; epoch_started=time.time()
         for start in range(0,len(data["train"]),tc["dialogue_batch_size"]):
             ds=data["train"][start:start+tc["dialogue_batch_size"]]; batch=move(collate_dialogues(ds,tokenizer,token_ids,tc["max_length"],cfg["model"]["prompt_history_window"],standard=True),torch.device("cuda")); out=model(batch,batch["labels"],tokenizer=tokenizer,dialogues=ds,max_length=tc["max_length"],history_window=cfg["model"]["prompt_history_window"]); (out["loss"]/tc["gradient_accumulation"]).backward(); total+=float(out["loss"]); steps+=1
             if steps%tc["gradient_accumulation"]==0 or start+tc["dialogue_batch_size"]>=len(data["train"]): torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad],1.0); optimizer.step(); optimizer.zero_grad(set_to_none=True)
+            elapsed=time.time()-epoch_started; state={"status":"training","epoch":epoch,"epochs":tc["epochs"],"dialogue_batch":steps,"dialogue_batches":len(data["train"]),"mean_loss":total/steps,"elapsed_seconds":time.time()-run_started,"epoch_eta_seconds":elapsed/max(steps,1)*(len(data["train"])-steps)}; (output/"progress.json").write_text(json.dumps(state,indent=2),encoding="utf-8"); print(f"epoch={epoch}/{tc['epochs']} dialogue={steps}/{len(data['train'])} loss={total/steps:.4f} eta={state['epoch_eta_seconds']/60:.1f}m",flush=True)
         metrics,_,_=evaluate_dialogues(model,data["dev"],tokenizer,token_ids,cfg); record={"epoch":epoch,"train_loss":total/max(steps,1),**{f"dev_{k}":v for k,v in metrics.items()}}; history.append(record); print(json.dumps(record),flush=True)
         if metrics["weighted_f1"]>best: best=metrics["weighted_f1"]; save_checkpoint(model,tokenizer,output/"best_model",{"config":cfg,"best_epoch":epoch,"labels":LABELS})
         (output/"training_log.json").write_text(json.dumps(history,indent=2),encoding="utf-8")
+    (output/"progress.json").write_text(json.dumps({"status":"complete","best_dev_weighted_f1":best,"elapsed_seconds":time.time()-run_started},indent=2),encoding="utf-8")
 
 if __name__=="__main__": main()
