@@ -2,15 +2,17 @@ import sys
 from pathlib import Path
 import torch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from models.graph_builder import DialogueGraphBuilder,SAME_SPEAKER,INTER_SPEAKER,TEMPORAL
+from models.graph_builder import DialogueGraphBuilder,SELF,SAME_SPEAKER,INTER_SPEAKER,TEMPORAL,NUM_RELATIONS
 from models.dialogue_gcn import DialogueGCN
 from models.multimodal_encoder import MultimodalEncoder
 from models.causal_erc import CausalERCDialogueGCNQwen3
 from data.dataset import collate_dialogues
 
-def test_graph_relations_are_causal():
-    graph=DialogueGraphBuilder(4)(torch.tensor([[0,1,0]]),torch.tensor([3])); src,dst=graph.edge_index
-    assert torch.all(src<dst); assert set(graph.edge_type.tolist())=={SAME_SPEAKER,INTER_SPEAKER,TEMPORAL}
+def test_graph_is_bidirectional_offline_and_has_future_edges():
+    graph=DialogueGraphBuilder(4)(torch.tensor([[0,1,0,1]]),torch.tensor([4])); src,dst=graph.edge_index
+    assert graph.num_nodes == 4 and set(graph.edge_type.tolist())=={SELF,SAME_SPEAKER,INTER_SPEAKER,TEMPORAL}
+    assert any((src == 3) & (dst == 0)) and any((src == 0) & (dst == 3))
+    assert NUM_RELATIONS == 4
 
 def test_dialogue_gcn_shape_and_gradients():
     graph=DialogueGraphBuilder(4)(torch.tensor([[0,1,0]]),torch.tensor([3])); x=torch.randn(3,8,requires_grad=True); y=DialogueGCN(8,2,0.0)(x,graph); y.sum().backward(); assert y.shape==(3,8) and x.grad is not None
