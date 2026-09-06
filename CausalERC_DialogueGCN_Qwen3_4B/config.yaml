@@ -1,5 +1,5 @@
 data:
-  path: D:/C_Code/PycharmProjects/MMAAE_MDiaGCN/MMAAE_MDiaGCN/MultiModal_DialogGCN/save/data.pkl
+  path: data/iemocap/data.pkl
 model:
   backbone: Qwen/Qwen3-4B
   hidden_dim: 200

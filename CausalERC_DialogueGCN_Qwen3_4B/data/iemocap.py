@@ -1,20 +1,29 @@
-import pickle,sys
+import pickle
 from pathlib import Path
 import numpy as np
 LABELS=["angry","happy","sad","neutral","excited","frustrated"]
 ALIASES={"angry":0,"anger":0,"ang":0,"happy":1,"hap":1,"happiness":1,"sad":2,"sadness":2,"neutral":3,"neu":3,"excited":4,"excitement":4,"exc":4,"frustrated":5,"frustration":5,"fru":5}
-def _ensure_dgcn_importable():
-    for p in Path(__file__).resolve().parents:
-        if (p/"dgcn").is_dir():
-            if str(p) not in sys.path: sys.path.insert(0,str(p))
-            return
+
+
+class _LegacySample:
+    """Compatibility target for IEMOCAP pickles created as dgcn.Sample.Sample."""
+
+    pass
+
+
+class _IEMOCAPUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == "dgcn.Sample" and name == "Sample":
+            return _LegacySample
+        return super().find_class(module, name)
+
+
 def label_index(x):
     i=int(x) if isinstance(x,(int,np.integer)) else ALIASES.get(str(x).lower(),-1)
     if not 0<=i<6: raise ValueError(f"unknown label {x!r}")
     return i
 def load_iemocap(path):
-    _ensure_dgcn_importable()
-    with Path(path).open("rb") as f: raw=pickle.load(f)
+    with Path(path).open("rb") as f: raw=_IEMOCAPUnpickler(f).load()
     out={}
     for split in ("train","dev","test"):
         out[split]=[]
