@@ -10,7 +10,7 @@ model:
   graph_context_window: 10
   prompt_history_window: 4
 training:
-  epochs: 10
+  epochs: 5
   learning_rate: 2.0e-4
   weight_decay: 0.01
   dialogue_batch_size: 1
